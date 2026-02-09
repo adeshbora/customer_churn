@@ -1,0 +1,6 @@
+duckdb==0.9.1
+pandas==2.1.1
+psycopg2-binary==2.9.7
+faker==19.6.2
+pytest==7.4.2
+pytest-cov==4.1.0
