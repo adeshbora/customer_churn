@@ -2,7 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: DuckDB Analytics
-    type: infinity
+    type: simpod-json-datasource
     access: proxy
     url: http://duckdb-api:5432
     isDefault: true

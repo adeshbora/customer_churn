@@ -99,6 +99,66 @@ class DuckDBHandler(BaseHTTPRequestHandler):
                     self.send_response(500)
                     self.end_headers()
                     
+            elif parsed_url.path == '/summary':
+                # Get summary metrics
+                try:
+                    result = conn.execute("""
+                        SELECT 
+                            COUNT(*) as total_customers,
+                            ROUND(AVG(ChurnFlag) * 100, 2) as churn_rate,
+                            ROUND(AVG(MonthlyCharges), 2) as avg_monthly_charges,
+                            ROUND(AVG(Tenure), 2) as avg_tenure
+                        FROM customer_churn_analytics
+                    """).fetchone()
+                    
+                    data = {
+                        'total_customers': int(result[0]) if result[0] else 0,
+                        'churn_rate': float(result[1]) if result[1] else 0,
+                        'avg_monthly_charges': float(result[2]) if result[2] else 0,
+                        'avg_tenure': float(result[3]) if result[3] else 0
+                    }
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(data).encode())
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching summary: {e}")
+                    self.send_response(500)
+                    self.end_headers()
+                    
+            elif parsed_url.path == '/churn_by_contract':
+                # Get churn by contract type
+                try:
+                    result = conn.execute("""
+                        SELECT 
+                            ContractType,
+                            COUNT(*) as count,
+                            ROUND(AVG(ChurnFlag) * 100, 2) as churn_rate
+                        FROM customer_churn_analytics
+                        GROUP BY ContractType
+                        ORDER BY churn_rate DESC
+                    """).fetchall()
+                    
+                    data = [{
+                        'contract_type': row[0],
+                        'count': int(row[1]),
+                        'churn_rate': float(row[2]) if row[2] else 0
+                    } for row in result]
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(data).encode())
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching churn by contract: {e}")
+                    self.send_response(500)
+                    self.end_headers()
+                    
             else:
                 self.send_response(404)
                 self.end_headers()

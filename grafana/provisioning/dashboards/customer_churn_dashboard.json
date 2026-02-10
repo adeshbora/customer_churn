@@ -1,6 +1,7 @@
 {
   "dashboard": {
     "id": null,
+    "uid": "customer-churn",
     "title": "Customer Churn Analytics",
     "tags": ["customer", "churn", "analytics"],
     "style": "dark",
@@ -10,26 +11,43 @@
         "id": 1,
         "title": "Total Customers",
         "type": "stat",
+        "datasource": "DuckDB Analytics",
         "targets": [
           {
-            "expr": "1000",
-            "refId": "A"
+            "target": "summary",
+            "refId": "A",
+            "type": "timeseries"
           }
         ],
         "fieldConfig": {
           "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
+            "mappings": [],
             "thresholds": {
+              "mode": "absolute",
               "steps": [
                 {
                   "color": "green",
                   "value": null
                 }
               ]
+            },
+            "color": {
+              "mode": "thresholds"
             }
-          }
+          },
+          "overrides": []
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": "/^total_customers$/"
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto"
         },
         "gridPos": {
           "h": 8,
@@ -42,22 +60,27 @@
         "id": 2,
         "title": "Churn Rate %",
         "type": "stat",
+        "datasource": "DuckDB Analytics",
         "targets": [
           {
-            "expr": "85.2",
-            "refId": "A"
+            "target": "summary",
+            "refId": "A",
+            "type": "timeseries"
           }
         ],
         "fieldConfig": {
           "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
+            "mappings": [],
             "thresholds": {
+              "mode": "absolute",
               "steps": [
                 {
                   "color": "green",
                   "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 50
                 },
                 {
                   "color": "red",
@@ -65,8 +88,24 @@
                 }
               ]
             },
+            "color": {
+              "mode": "thresholds"
+            },
             "unit": "percent"
-          }
+          },
+          "overrides": []
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": "/^churn_rate$/"
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto"
         },
         "gridPos": {
           "h": 8,
@@ -79,18 +118,19 @@
         "id": 3,
         "title": "Average Monthly Charges",
         "type": "stat",
+        "datasource": "DuckDB Analytics",
         "targets": [
           {
-            "expr": "74.44",
-            "refId": "A"
+            "target": "summary",
+            "refId": "A",
+            "type": "timeseries"
           }
         ],
         "fieldConfig": {
           "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
+            "mappings": [],
             "thresholds": {
+              "mode": "absolute",
               "steps": [
                 {
                   "color": "green",
@@ -98,8 +138,24 @@
                 }
               ]
             },
+            "color": {
+              "mode": "thresholds"
+            },
             "unit": "currencyUSD"
-          }
+          },
+          "overrides": []
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": "/^avg_monthly_charges$/"
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto"
         },
         "gridPos": {
           "h": 8,
@@ -112,26 +168,44 @@
         "id": 4,
         "title": "Average Tenure (Months)",
         "type": "stat",
+        "datasource": "DuckDB Analytics",
         "targets": [
           {
-            "expr": "24.5",
-            "refId": "A"
+            "target": "summary",
+            "refId": "A",
+            "type": "timeseries"
           }
         ],
         "fieldConfig": {
           "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
+            "mappings": [],
             "thresholds": {
+              "mode": "absolute",
               "steps": [
                 {
                   "color": "green",
                   "value": null
                 }
               ]
-            }
-          }
+            },
+            "color": {
+              "mode": "thresholds"
+            },
+            "decimals": 1
+          },
+          "overrides": []
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": "/^avg_tenure$/"
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto"
         },
         "gridPos": {
           "h": 8,
@@ -143,34 +217,62 @@
       {
         "id": 5,
         "title": "Churn by Contract Type",
-        "type": "piechart",
+        "type": "table",
+        "datasource": "DuckDB Analytics",
         "targets": [
           {
-            "expr": "Month-to-Month: 88.5%, One-Year: 11.3%, Two-Year: 2.8%",
-            "refId": "A"
+            "target": "churn_by_contract",
+            "refId": "A",
+            "type": "table"
           }
         ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "churn_rate"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "percent"
+                },
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true
+        },
         "gridPos": {
           "h": 9,
-          "w": 12,
+          "w": 24,
           "x": 0,
-          "y": 8
-        }
-      },
-      {
-        "id": 6,
-        "title": "Monthly Charges Distribution",
-        "type": "histogram",
-        "targets": [
-          {
-            "expr": "histogram_data",
-            "refId": "A"
-          }
-        ],
-        "gridPos": {
-          "h": 9,
-          "w": 12,
-          "x": 12,
           "y": 8
         }
       }
@@ -186,8 +288,8 @@
     "annotations": {
       "list": []
     },
-    "refresh": "5s",
-    "schemaVersion": 27,
+    "refresh": "30s",
+    "schemaVersion": 38,
     "version": 0,
     "links": []
   }
