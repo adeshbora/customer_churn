@@ -68,75 +68,91 @@ def extract_and_load_to_staging(**context):
 def transform_and_load_to_production(**context):
     """Transform data: handle missing values and anonymize PII"""
     
-    fake = Faker()
-    
-    # Connect to staging database
-    staging_db = '/opt/airflow/databases/staging.duckdb'
-    staging_conn = duckdb.connect(staging_db)
-    
-    # Connect to production database
-    prod_db = '/opt/airflow/databases/production.duckdb'
-    prod_conn = duckdb.connect(prod_db)
-    
-    # Read from staging
-    df = staging_conn.execute("SELECT * FROM staging_customer_churn").df()
-    
-    # Data transformations
-    # 1. Handle missing values with defaults
-    df['Age'] = df['Age'].fillna(df['Age'].median())
-    df['Gender'] = df['Gender'].fillna('Unknown')
-    df['Tenure'] = df['Tenure'].fillna(0)
-    df['MonthlyCharges'] = df['MonthlyCharges'].fillna(df['MonthlyCharges'].mean())
-    df['TotalCharges'] = df['TotalCharges'].fillna(0.0)
-    df['ContractType'] = df['ContractType'].fillna('Month-to-Month')
-    df['InternetService'] = df['InternetService'].fillna('None')
-    df['TechSupport'] = df['TechSupport'].fillna('No')
-    df['Churn'] = df['Churn'].fillna('No')
-    
-    # 2. Anonymize PII (CustomerID)
-    df['AnonymizedCustomerID'] = [fake.uuid4() for _ in range(len(df))]
-    df = df.drop('CustomerID', axis=1)
-    
-    # 3. Add derived fields for analytics
-    df['ChurnFlag'] = df['Churn'].apply(lambda x: 1 if x == 'Yes' else 0)
-    df['MonthlyChargesCategory'] = pd.cut(df['MonthlyCharges'], 
-                                        bins=[0, 50, 100, float('inf')], 
-                                        labels=['Low', 'Medium', 'High'])
-    df['TenureCategory'] = pd.cut(df['Tenure'], 
-                                bins=[0, 12, 36, float('inf')], 
-                                labels=['New', 'Medium', 'Long'])
-    
-    # Create production table
-    prod_conn.execute("""
-        CREATE TABLE IF NOT EXISTS customer_churn_analytics (
-            AnonymizedCustomerID VARCHAR,
-            Age INTEGER,
-            Gender VARCHAR,
-            Tenure INTEGER,
-            MonthlyCharges DECIMAL(10,2),
-            ContractType VARCHAR,
-            InternetService VARCHAR,
-            TotalCharges DECIMAL(10,2),
-            TechSupport VARCHAR,
-            Churn VARCHAR,
-            ChurnFlag INTEGER,
-            MonthlyChargesCategory VARCHAR,
-            TenureCategory VARCHAR,
-            load_timestamp TIMESTAMP,
-            processed_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # Clear and insert transformed data
-    prod_conn.execute("DELETE FROM customer_churn_analytics")
-    prod_conn.execute("INSERT INTO customer_churn_analytics SELECT * FROM df")
-    
-    row_count = prod_conn.execute("SELECT COUNT(*) FROM customer_churn_analytics").fetchone()[0]
-    print(f"Loaded {row_count} rows to production table")
-    
-    # Close connections
-    staging_conn.close()
-    prod_conn.close()
+    try:
+        fake = Faker()
+        
+        # Connect to staging database
+        staging_db = '/opt/airflow/databases/staging.duckdb'
+        staging_conn = duckdb.connect(staging_db)
+        
+        # Connect to production database
+        prod_db = '/opt/airflow/databases/production.duckdb'
+        prod_conn = duckdb.connect(prod_db)
+        
+        # Read from staging
+        df = staging_conn.execute("SELECT * FROM staging_customer_churn").df()
+        print(f"Read {len(df)} rows from staging")
+        
+        # Data transformations
+        # 1. Handle missing values with defaults
+        df['Age'] = df['Age'].fillna(df['Age'].median())
+        df['Gender'] = df['Gender'].fillna('Unknown')
+        df['Tenure'] = df['Tenure'].fillna(0)
+        df['MonthlyCharges'] = df['MonthlyCharges'].fillna(df['MonthlyCharges'].mean())
+        df['TotalCharges'] = df['TotalCharges'].fillna(0.0)
+        df['ContractType'] = df['ContractType'].fillna('Month-to-Month')
+        df['InternetService'] = df['InternetService'].fillna('None')
+        df['TechSupport'] = df['TechSupport'].fillna('No')
+        df['Churn'] = df['Churn'].fillna('No')
+        
+        # 2. Anonymize PII (CustomerID)
+        df['AnonymizedCustomerID'] = [fake.uuid4() for _ in range(len(df))]
+        df = df.drop('CustomerID', axis=1)
+        
+        # 3. Add derived fields for analytics
+        df['ChurnFlag'] = df['Churn'].apply(lambda x: 1 if x == 'Yes' else 0)
+        df['MonthlyChargesCategory'] = pd.cut(df['MonthlyCharges'], 
+                                            bins=[0, 50, 100, float('inf')], 
+                                            labels=['Low', 'Medium', 'High']).astype(str)
+        df['TenureCategory'] = pd.cut(df['Tenure'], 
+                                    bins=[0, 12, 36, float('inf')], 
+                                    labels=['New', 'Medium', 'Long']).astype(str)
+        
+        # Add processed timestamp
+        df['processed_timestamp'] = pd.Timestamp.now()
+        
+        # Reorder columns to match table schema
+        df = df[['AnonymizedCustomerID', 'Age', 'Gender', 'Tenure', 'MonthlyCharges',
+                 'ContractType', 'InternetService', 'TotalCharges', 'TechSupport', 
+                 'Churn', 'ChurnFlag', 'MonthlyChargesCategory', 'TenureCategory',
+                 'load_timestamp', 'processed_timestamp']]
+        
+        # Create production table
+        prod_conn.execute("""
+            CREATE TABLE IF NOT EXISTS customer_churn_analytics (
+                AnonymizedCustomerID VARCHAR,
+                Age INTEGER,
+                Gender VARCHAR,
+                Tenure INTEGER,
+                MonthlyCharges DECIMAL(10,2),
+                ContractType VARCHAR,
+                InternetService VARCHAR,
+                TotalCharges DECIMAL(10,2),
+                TechSupport VARCHAR,
+                Churn VARCHAR,
+                ChurnFlag INTEGER,
+                MonthlyChargesCategory VARCHAR,
+                TenureCategory VARCHAR,
+                load_timestamp TIMESTAMP,
+                processed_timestamp TIMESTAMP
+            )
+        """)
+        
+        # Clear and insert transformed data
+        prod_conn.execute("DELETE FROM customer_churn_analytics")
+        prod_conn.register('df_temp', df)
+        prod_conn.execute("INSERT INTO customer_churn_analytics SELECT * FROM df_temp")
+        
+        row_count = prod_conn.execute("SELECT COUNT(*) FROM customer_churn_analytics").fetchone()[0]
+        print(f"Successfully loaded {row_count} rows to production table")
+        
+        # Close connections
+        staging_conn.close()
+        prod_conn.close()
+        
+    except Exception as e:
+        print(f"ERROR in transform_and_load_to_production: {str(e)}")
+        raise
 
 def generate_data_quality_report(**context):
     """Generate data quality metrics"""
