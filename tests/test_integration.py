@@ -56,6 +56,7 @@ class TestPipelineIntegration(unittest.TestCase):
             )
         """)
         
+        staging_conn.register('df', df)
         staging_conn.execute("INSERT INTO staging_customer_churn SELECT *, CURRENT_TIMESTAMP FROM df")
         staging_count = staging_conn.execute("SELECT COUNT(*) FROM staging_customer_churn").fetchone()[0]
         self.assertEqual(staging_count, 5)
@@ -64,7 +65,7 @@ class TestPipelineIntegration(unittest.TestCase):
         df = staging_conn.execute("SELECT * FROM staging_customer_churn").df()
         
         # Apply transformations
-        df['Age'] = df['Age'].fillna(df['Age'].median())
+        df['Age'] = df['Age'].fillna(int(df['Age'].median()))
         df['Gender'] = df['Gender'].fillna('Unknown')
         df['Tenure'] = df['Tenure'].fillna(0)
         df['MonthlyCharges'] = df['MonthlyCharges'].fillna(df['MonthlyCharges'].mean())
@@ -111,6 +112,7 @@ class TestPipelineIntegration(unittest.TestCase):
             )
         """)
         
+        prod_conn.register('df', df)
         prod_conn.execute("INSERT INTO customer_churn_analytics SELECT * FROM df")
         prod_count = prod_conn.execute("SELECT COUNT(*) FROM customer_churn_analytics").fetchone()[0]
         self.assertEqual(prod_count, 5)

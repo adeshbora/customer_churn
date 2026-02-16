@@ -1,38 +1,83 @@
 #!/usr/bin/env python3
 """
-Simple HTTP server to expose DuckDB data for Grafana.
-Since Grafana needs PostgreSQL protocol, we'll use a simple HTTP API approach.
+DuckDB HTTP API Proxy
+
+Purpose: Expose DuckDB data via HTTP API for Grafana and other consumers.
+
+Why HTTP API?
+- Grafana doesn't natively support DuckDB
+- HTTP is universal and firewall-friendly
+- Enables multiple consumers (dashboards, apps, APIs)
+- Decouples data access from storage
+
+Architecture:
+- Lightweight HTTP server (no external dependencies)
+- Read-only access to production database (safety)
+- JSON responses for easy consumption
+- CORS enabled for browser-based clients
+
+Endpoints:
+- /health: Health check for monitoring
+- /summary: Key business metrics (total customers, churn rate, etc.)
+- /churn_by_contract: Churn analysis by contract type
+- /metrics: Historical data quality metrics
+- /analytics: Detailed analytics by contract type
 """
 
-import time
 import duckdb
 import json
+import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 import logging
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging for observability
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
+# Database path from environment variable
+PRODUCTION_DB = os.getenv('PRODUCTION_DB_PATH', '/opt/airflow/databases/production.duckdb')
+
+
 class DuckDBHandler(BaseHTTPRequestHandler):
+    """
+    HTTP request handler for DuckDB API.
+    
+    Design: Each request opens a new connection (stateless)
+    Why? DuckDB is embedded, connections are lightweight, and this ensures thread safety.
+    """
+    
     def do_GET(self):
+        """
+        Handle GET requests for different API endpoints.
+        
+        Pattern: Parse URL -> Query DuckDB -> Return JSON
+        """
         try:
-            # Parse the URL and query parameters
+            # Parse URL and query parameters
             parsed_url = urllib.parse.urlparse(self.path)
             query_params = urllib.parse.parse_qs(parsed_url.query)
             
-            # Connect to DuckDB
-            conn = duckdb.connect('/opt/airflow/databases/production.duckdb')
+            # Connect to DuckDB in read-only mode
+            # Why read-only? Prevents accidental data modification via API
+            conn = duckdb.connect(PRODUCTION_DB, read_only=True)
             
-            # Handle different endpoints
+            # === ENDPOINT ROUTING ===
+            # Each endpoint serves a specific analytical purpose
+            
             if parsed_url.path == '/health':
+                # Health check endpoint for monitoring and load balancers
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "healthy"}).encode())
                 
             elif parsed_url.path == '/metrics':
-                # Get data quality metrics
+                # Historical data quality metrics for trend analysis
+                # Returns last 10 metric snapshots
                 try:
                     result = conn.execute("""
                         SELECT metric_name, metric_value, run_timestamp 
@@ -100,7 +145,8 @@ class DuckDBHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     
             elif parsed_url.path == '/summary':
-                # Get summary metrics
+                # Summary metrics endpoint for dashboard KPIs
+                # Single query for performance (one table scan)
                 try:
                     result = conn.execute("""
                         SELECT 
@@ -130,7 +176,8 @@ class DuckDBHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     
             elif parsed_url.path == '/churn_by_contract':
-                # Get churn by contract type
+                # Churn analysis by contract type for segmentation
+                # Ordered by churn rate to highlight risk segments
                 try:
                     result = conn.execute("""
                         SELECT 
@@ -171,17 +218,26 @@ class DuckDBHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        # Suppress default logging
+        """
+        Override default logging to reduce noise.
+        
+        Why suppress? Default HTTP server logs every request.
+        We use custom logger for important events only.
+        """
         pass
 
 if __name__ == "__main__":
-    server_address = ('', 5432)
+    port = int(os.getenv('API_PORT', '5432'))
+    server_address = ('', port)
     httpd = HTTPServer(server_address, DuckDBHandler)
-    logger.info("DuckDB HTTP server started on port 5432")
+    logger.info(f"DuckDB HTTP API server started on port {port}")
+    logger.info("Available endpoints: /health, /summary, /churn_by_contract, /metrics, /analytics")
     
-    # Keep the server running
+    # Keep the server running indefinitely
+    # Graceful shutdown on Ctrl+C
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        logger.info("Server stopped")
+        logger.info("Shutting down server...")
         httpd.server_close()
+        logger.info("Server stopped")

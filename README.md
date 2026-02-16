@@ -1,24 +1,81 @@
 # Customer Churn ELT Pipeline
 
-A complete ELT (Extract, Load, Transform) pipeline for customer churn data analysis using Apache Airflow, DuckDB, and Grafana.
+A production-ready ELT (Extract, Load, Transform) pipeline for customer churn analytics using modern data engineering best practices.
 
-## Architecture
+## Architecture Overview
 
-- **Orchestration**: Apache Airflow for workflow management
-- **Staging Database**: DuckDB for fast analytical processing
-- **Production Database**: DuckDB optimized for reporting
-- **Reporting**: Grafana for data visualization
-- **Containerization**: Docker Compose for easy deployment
+### Design Philosophy: Separation of Concerns
 
-## Features
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────┐
+│   CSV Data  │────▶│   Airflow    │────▶│   DuckDB    │────▶│ Grafana  │
+│   (Source)  │     │ (Orchestrate)│     │ (Transform) │     │(Visualize)│
+└─────────────┘     └──────────────┘     └─────────────┘     └──────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ ELT Script   │
+                    │ (Process)    │
+                    └──────────────┘
+```
 
-- ✅ **Hourly Data Ingestion**: Configurable schedule for processing CSV data
-- ✅ **Data Quality**: Missing value handling with sensible defaults
-- ✅ **PII Anonymization**: Customer ID anonymization using UUID
-- ✅ **Data Transformation**: Derived fields for analytics (churn flags, categories)
-- ✅ **Monitoring**: Data quality metrics and pipeline statistics
-- ✅ **Reporting**: Interactive Grafana dashboards
-- ✅ **Containerized**: Complete Docker setup for easy deployment
+### Why This Architecture?
+
+**Airflow (Orchestration Layer)**
+- Scheduling and workflow management
+- Retry logic and error handling
+- Monitoring and alerting
+- Does NOT contain business logic
+
+**ELT Script (Processing Layer)**
+- Business logic and transformations
+- Testable independently of Airflow
+- Reusable in different contexts
+- Clear separation from orchestration
+
+**DuckDB (Storage & Compute Layer)**
+- Staging database (raw data)
+- Production database (transformed data)
+- SQL-based transformations (fast, declarative)
+- Columnar storage for analytics
+
+**HTTP API (Data Access Layer)**
+- Exposes DuckDB data via REST
+- Decouples consumers from storage
+- Enables multiple clients (Grafana, apps, etc.)
+
+### ELT vs ETL: Why ELT?
+
+**Traditional ETL**: Extract → Transform (in memory) → Load
+**Modern ELT**: Extract → Load (raw) → Transform (in database)
+
+**Benefits of ELT**:
+1. **Performance**: DuckDB's vectorized engine is faster than Python for transformations
+2. **Scalability**: Database handles large datasets efficiently
+3. **Auditability**: Raw data preserved in staging for reprocessing
+4. **Simplicity**: SQL transformations are declarative and easier to maintain
+
+## Project Structure
+
+```
+customer_churn/
+├── dags/
+│   └── customer_churn_elt_dag.py    # Airflow DAG (orchestration only)
+├── scripts/
+│   ├── customer_churn_elt.py        # ELT processing logic (business logic)
+│   └── duckdb_proxy.py              # HTTP API for data access
+├── data/
+│   └── customer_churn_data.csv      # Source data
+├── databases/                       # DuckDB files (created at runtime)
+│   ├── staging.duckdb               # Raw data
+│   └── production.duckdb            # Transformed data
+├── grafana/
+│   └── provisioning/                # Grafana configuration
+├── tests/                           # Unit and integration tests
+├── docker-compose.yml               # Container orchestration
+├── Dockerfile                       # Airflow image with dependencies
+└── requirements.txt                 # Python dependencies
+```
 
 ## Quick Start
 
